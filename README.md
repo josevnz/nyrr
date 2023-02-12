@@ -210,7 +210,7 @@ datasources:
   - name: DS_NYRR.ORG_RESULTS
     type: marcusolsson-csv-datasource
     uid: "{{ datasource_id }}"
-    url: "http://localhost:8080/{{ nyrr_race_results_file }}"
+    url: "http://{{ nyrr_service_host }}:8080/{{ nyrr_race_results_file }}"
     editable: true
     jsonData:
       storage: http
@@ -394,7 +394,5 @@ The whole vide of the Grafana instance, freshly created is here:
 * There are other visualization tools out there, I like Grafana because is Open Source, workflow is easy to understand and the results are good but feel free to try anything else with your data.
 * You don't need a database to be able to manage your running data. A simple CSV or JSON file can be used for that purpose, but you can always make your datastore more sophisticated.
 * Grafana ecosystem has other tools out there that can help you [manage your datasources as code](https://grafana.com/tutorials/provision-dashboards-and-data-sources/), allowing you to automate even more your process. In particular I like [grafyaml](https://docs.openstack.org/infra/grafyaml/) as is well documented and mature.
-* If you need to perform more complex tasks while provisioning your Grafana instances with Ansible, you may want to explore the [ansible-grafana](https://github.com/cloudalchemy/ansible-grafana) project. It uses Grafana REST API to perform very complex provisioning tasks with ease (keep in mind the project seems to be stale). 
-* [You can use Buildah](https://github.com/containers/buildah/blob/main/install.md) to create your containers instead of the Dockerfile. Buildah doesn't use a docker daemon and allows you to break the construction of the image by using program calls, which makes it easier to integrate with Bash scripts for example.
-* If you like the idea of using Buildah, then you should explore Ansible with Builda: [ansible-bender](https://github.com/ansible-community/ansible-bender).
+* If you need to perform more complex tasks while provisioning your Grafana instances with Ansible, you may want to explore the [ansible-grafana](https://github.com/cloudalchemy/ansible-grafana) project. It uses Grafana REST API to perform very complex provisioning tasks with ease (keep in mind the project seems to be stale).
 * Finally, support your non-profit local racing club. For example NYRR promotes [youth running](https://www.nyrr.org/youth) and over the years have helped to build community relationships not just New York state but with people from all over the world. If you like running, please consider participating in their organized races, donating or volunteering.
