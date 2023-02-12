@@ -1,0 +1,11 @@
+# Datasource definition for the race results in CSV format
+---
+apiVersion: 1
+datasources:
+  - name: DS_NYRR.ORG_RESULTS
+    type: marcusolsson-csv-datasource
+    uid: "{{ datasource_id }}"
+    url: "http://{{ nyrr_service_host }}:8080/{{ nyrr_race_results_file }}"
+    editable: true
+    jsonData:
+      storage: http

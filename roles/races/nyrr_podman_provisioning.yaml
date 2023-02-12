@@ -1,0 +1,130 @@
+# Ansible Playbook to setup and install Podman container for the NYRR dashboards
+# https://grafana.com/docs/grafana/latest/administration/provisioning/
+# Need ansible?:
+# python3 -m pip install --user ansible ansible-lint
+# Author: Jose Vicente Nunez (@josevnz@fosstodon.org)
+---
+- name: Tasks to get a NYRR race dashboards up and running
+  hosts: localhost
+  vars:
+    race_results_dir: /home/josevnz/raceresults # Update this path
+    grafana_data_dir: /home/josevnz/grafana_raceresults_data # Update this path
+    nyrr_race_results_file: nyrr_org_results.csv
+    datasource_id: 948e72a8-a6cc-11ed-a1ef-1c8341284421 # uuidgen --time
+    nyrr_service_host: dmaf5.home # Replace with your host name
+    nyrr_service_port: 8080
+    nyrr_service_tag: 3.11-slim
+    grafana_plugins: marcusolsson-csv-datasource,marcusolsson-json-datasource
+    grafana_service_port: 3000
+  tasks:
+    - name: Toolchain preparation
+      tags: toolchain
+      ansible.builtin.dnf:
+        name: podman
+        state: installed
+      become: true
+    - name: Provision data services
+      tags: data_services
+      block:
+        - name: Copy NYRR race results to {{ race_results_dir }}
+          tags: copy_service_files
+          ansible.builtin.copy:
+            dest: "{{ race_results_dir }}/"
+            src: "{{ nyrr_race_results_file }}"
+            directory_mode: a+xr
+            mode: a+r,u+w
+        - name: Python3 image
+          tags: pull_service_image
+          containers.podman.podman_image:
+            name: python
+            tag: "{{ nyrr_service_tag }}"
+        - name: Launch containers required to see the race results
+          tags: launch_nyrr_data
+          containers.podman.podman_container:
+            init: true
+            name: "nyrr_server"
+            image: "python:{{ nyrr_service_tag }}"
+            command: "python3 -m http.server {{ nyrr_service_port }}"
+            state: started
+            security_opt:
+              label=disable
+            restart_policy: "always"
+            detach: true
+            workdir: /mnt
+            rm: false
+            ports:
+              - "{{ nyrr_service_port }}:{{ nyrr_service_port }}"
+            expose:
+              - "{{ nyrr_service_port }}"
+            volumes:
+              - "{{ race_results_dir }}/{{ nyrr_race_results_file }}:/mnt/{{ nyrr_race_results_file }}:ro"
+            healthcheck: "python3 -c 'import urllib.request; import sys; urllib.request.urlopen(\"http://localhost:{{ nyrr_service_port }}/{{ nyrr_race_results_file }}\").readlines(); sys.exit(0)'"
+            healthcheck_retries: 3
+            healthcheck_start_period: "10s"
+    - name: Provision visualization services
+      tags: visualization_services
+      block:
+        - name: Copy Grafana artifacts to final location
+          tags: copy_visualization_files
+          ansible.builtin.copy:
+            dest: "{{ race_results_dir }}/"
+            src: "{{ nyrr_race_results_file }}"
+            directory_mode: a+xr
+            mode: a+r,u+w
+        - name: Grafana image
+          tags: pull_service_image
+          containers.podman.podman_image:
+            name: "grafana/grafana-oss"
+            tag: "latest"
+        - name: Provisioning directories {{ grafana_data_dir }}
+          tags: grafana_provision_dirs
+          ansible.builtin.file:
+            path: "{{ grafana_data_dir }}/provisioning/{{ item }}"
+            mode: "ugo+xr,u+w"
+            state: "directory"
+            recurse: true
+          loop:
+            - access-control
+            - alerting
+            - dashboards/racing
+            - datasources
+            - notifiers
+            - plugins
+        - name: Launch Grafana container
+          tags: launch_grafana
+          containers.podman.podman_container:
+            init: true
+            name: "grafana_races"
+            image: "grafana/grafana-oss:latest"
+            state: started
+            security_opt:
+              label=disable
+            restart_policy: "always"
+            detach: true
+            rm: false
+            env:
+              GF_INSTALL_PLUGINS: "{{ grafana_plugins }}"
+            ports:
+              - "{{ grafana_service_port }}:{{ grafana_service_port }}"
+            expose:
+              - "{{ grafana_service_port }}"
+            volumes:
+              - "{{ grafana_data_dir }}/provisioning:/etc/grafana/provisioning:rw"
+        - name: Deploy files to provision directories
+          tags: files_grafana
+          ansible.builtin.copy:
+            dest: "{{ grafana_data_dir }}/{{ item | replace('files/grafana/', '') }}"
+            src: "{{ item }}"
+            mode: a+r,u+w
+          loop:
+            - files/grafana/provisioning/dashboards/racing/NYRR-1675298041762.json
+        - name: Deploy templates to provision directories
+          tags: templates_grafana
+          ansible.builtin.template:
+            dest: "{{ grafana_data_dir }}/{{ item | replace('templates/grafana/', '') | replace('.j2', '') }}"
+            src: "{{ item }}"
+            mode: a+r,u+w
+          loop:
+            - templates/grafana/provisioning/dashboards/default.yaml.j2
+            - templates/grafana/provisioning/datasources/nyrr_race_results_datasource.yaml.j2
+            - templates/grafana/provisioning/plugins/csv.yaml.j2

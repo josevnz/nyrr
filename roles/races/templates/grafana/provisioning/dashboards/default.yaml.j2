@@ -1,0 +1,13 @@
+# We want Grafana to derive the folder structure from the filesystem
+# All paths referred here must exist inside the container
+# https://grafana.com/docs/grafana/latest/administration/provisioning/#datasources
+---
+apiVersion: 1
+providers:
+  - name: Race results dashboards providers
+    type: file
+    updateIntervalSeconds: 10
+    options:
+      path:
+        /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: true

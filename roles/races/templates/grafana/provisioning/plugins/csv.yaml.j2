@@ -1,0 +1,10 @@
+# Extra settings for the CSV datasource plugin (https://grafana.github.io/grafana-csv-datasource/query-editor)
+# Plugin MUST be installed prior deploying this file
+---
+apiVersion: 1
+apps:
+  - type: marcusolsson-csv-datasource
+    org_id: 1
+    disabled: false
+    jsonData:
+      allow_local_mode: true
