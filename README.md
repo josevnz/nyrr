@@ -9,31 +9,31 @@ So [who are they](https://www.nyrr.org/about)?
 
 Over the years I ran many of their races, and it is not surprise they have one of the biggest databases of races for many distances (like 5K, Marathon). Curious, I downloaded a full list of my race results into Excel format, massaged it a bit and then started asking more questions.
 
-In this tutorial I will show how you can:
+In this tutorial I will show how to:
 
-* Set up a simple PODMAN container that will be used to provide access to our race history in CSV format
-* How to set up a CSV data-source in Grafana
+* Set up a Podman container that provides access to your race history in CSV format
+* Set up a CSV data-source in Grafana
 * Create a dashboard that shows multiple views of the same data, including annotations.
 
 
 ## Requirements
 * Ability to install software as root on a Linux distribution (I used Fedora, feel free to run anything else you like)
 * Python 3. Comes pre-installed on most Linux distributions
-* PODMAN. Don't worry, will show you how to install these quickly later.
-* Grafana (will run on a container, but a bare-metal installation also works). Also with the ability to install plugins, like the CSV plugin.
+* Podman. Don't worry, I will show you how to install it later.
+* Grafana (running in a container, but a bare-metal installation also works). Also with the ability to install plugins, like the CSV plugin.
 
 But the most important requirement is curiosity.
 
-Right now, let's install Ansible (if is not there) so we can get started:
+Right now, let's install Ansible (if it is not there) so you can get started. In Fedora you can install Ansible using DNF:
 
 ```shell
-# In the rare case you don't have python3 installed
-# sudo dnf install -y python3
-python3 -m pip install --user ansible
-python3 -m pip install --user ansible-lint
+sudo dnf -y install ansible
 ```
 
-We will also need some extra tools for Ansible, like Podman support:
+For other distributions, consult [Ansible install instructions.](https://docs.ansible.com/ansible/latest/installation_guide/installation_distros.html)
+
+You also need some extra tools for Ansible, like Podman support:
+
 ```shell
 ansible-galaxy collection install containers.podman
 ```
@@ -44,7 +44,7 @@ Once you download your data from their webpage in Excel format, you need to do a
 
 ![](export_race_results.png)
 
-The resulting CSV will look more or less like this:
+The resulting CSV looks more or less like this:
 
 ```text
 Event Name,Event Date,Distance,Finish Time,Pace,Gun Time,Overall Place,Gender Place,Age-Group Place,Age-Graded Time,Age-Graded Place,Age-Graded Percent
@@ -56,18 +56,17 @@ ING New York City Marathon 2013,11/03/2013,Marathon,4:27:18,10:12,4:29:56,27160,
 
 The resulting CSV is very simple, no need for further transformations.
 
-Next step is to make this CSV file available over HTTP, so it can be used by Grafana. For that will use a PODMAN container.
+Next step is to make this CSV file available over HTTP, so it can be used by Grafana. For that you will use a Podman container.
 
-## Making sure we have the proper tools installed
+## Making sure you have the proper tools installed
 
-Next step is to write an Ansible playbook, [with the suggested structure](https://docs.ansible.com/ansible/latest/tips_tricks/sample_setup.html) where we put files, templates and the instructions to get everything installed and started in the proper order.  
+Next step is to write an Ansible playbook, [with the suggested structure](https://docs.ansible.com/ansible/latest/tips_tricks/sample_setup.html) where you put files, templates, and the instructions to get everything installed and started in the proper order.  
 
-The resulting Ansible playbook ([nyrr_podman_containers.yaml](roles/races/nyrr_podman_provisioning.yaml))
+The resulting Ansible playbook ([nyrr_podman_provisioning.yaml](roles/races/nyrr_podman_provisioning.yaml))
 
 ```yaml
 - name: Tasks to get a NYRR race dashboards up and running
   hosts: localhost
-  become: true
   tasks:
   - name: Toolchain preparation
     block:
@@ -75,27 +74,27 @@ The resulting Ansible playbook ([nyrr_podman_containers.yaml](roles/races/nyrr_p
         ansible.builtin.dnf:
           name: podman
           state: installed
-        tags: podman_install
+        become: true
     tags: toolchain
 ```
 
-Then run it with `ansible-playbook --tags copy_service_image roles/races/nyrr_podman_provisioning.yaml`:
+Then run it with `ansible-playbook --tags toolchain roles/races/nyrr_podman_provisioning.yaml` to install Podman.
 
 ## Creating the web application to provide the NYRR results CSV over HTTP
 
 The application is fairly simple:
 
 * Serve a static file over HTTP, the [python3.11 slim image](https://hub.docker.com/_/python) will work just well:
-* Only need to drop now our race results CSV file on the ```/home/josevnz/fitness``` directory and the webserver will pick it up, you can use ([nyrr_org_results.csv](roles/races/files/nyrr_org_results.csv)) to get you started.
-* To visualize the results, will use containerized Grafana with a few pre-installed plugins
+* Only need to drop the race results CSV file on the ```/home/josevnz/fitness``` directory (or similar directory on your machine) and the webserver will pick it up. You can use ([nyrr_org_results.csv](roles/races/files/nyrr_org_results.csv)) to get you started.
+* To visualize the results, you will use containerized Grafana with a few pre-installed plugins
 
 ### Chicken-and-egg problem with the Grafana container
 
 We have a classic "_what was first, the chicken or the egg_" problem here, because:
-1. We need a Grafana instance running, in order to setup a datasource and then implement the dashboard, but we want to be able to restore our Grafana instance easily, most likely on a more powerful server
+1. You need a Grafana instance running, in order to setup a datasource and then implement the dashboard, but you want to be able to restore your Grafana instance easily, most likely on a more powerful server
 2. You could argue you can create a datasource first, then spin a Grafana container and then implement the dashboard. But that is not how things are done in reality.
 
-You can see than Ansible is not needed for the test Grafana instance, but still a bit of automation is desired (like installing custom plugins).
+You can see that Ansible is not needed for the test Grafana instance, but still a bit of automation is desired (like installing custom plugins).
 
 I will run both the home_fitness webserver and the Grafana containers from the same location, also because we will mount the CSV from out home directory we need to pass a special [SELinux flag](https://docs.podman.io/en/v3.4.2/markdown/podman-run.1.html#labeling-volume-mounts) so the container can use the mounted file.
 
@@ -104,7 +103,7 @@ podman run --name nyrr_server --publish 8080:8080 --security-opt label=disable -
 1c0c23ad9240c8b606bb1c9e8d585b89e1b7718d15c81088f25533f34c3b03b6
 ```
 
-Then using a tool like curl we can try to download our processed copy of the NYRR race results:
+Then using a tool like curl you can try to download the processed copy of the NYRR race results:
 
 ```shell
 [josevnz@dmaf5 NYRR]$ curl --fail --verbose --silent --url http://localhost:8080/nyrr_org_results.csv
@@ -144,13 +143,13 @@ NYRR Dash to the Finish Line (5K),11/05/2011,5 km,0:23:36,07:36,0:25:32,593,471,
 * Closing connection 0
 ```
 
-Or a simpler way, which we will use for the container self health check:
+Or a simpler way, which you will use for the container self health check:
 
 ```shell
 python3 -c 'import urllib.request; import sys; urllib.request.urlopen("http://localhost:8080/nyrr_org_results.csv").readlines(); sys.exit(0)' && echo "SUCCESS"|| echo "FAILURE"
 ```
 
-Next we will do something similar to spin a throw away Grafana instance that we will use for development
+Next you will do something similar to spin a throw away Grafana instance that you will use for development
 
 ### Throw away Grafana instance
 
@@ -167,11 +166,11 @@ Time to focus on visualizing the race results.
 
 ### Creating and provisioning the datasource and the dashboard
 
-Once the instance is up, and you logged in the first time, you can add a CSV datasource (example shown below):
+Once the instance is up, you can log in the first time with user `admin` and password `admin`. Then, add a CSV datasource (example shown below):
 
 ![](csv_nyrr_org_results_datasource.png)
 
-Designing the Dashboard is something you do by interactively, and most likely after several attempts you will end having something that you like.
+Designing the Dashboard is something you do by interactively, and most likely after several attempts you end up having something that you like.
 
 So let's outline the steps for this one:
 
@@ -182,11 +181,11 @@ A detailed tutorial [on how create](https://grafana.com/docs/grafana/latest/dash
 
 ![](nyrr-race-results-dashboard.png)
 
-To be able to treat this as code, [we can export the dashboard definition](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/) as JSON and save it to a file:
+To be able to treat this as code, [export the dashboard definition](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/) as JSON and save it to a file:
 
 ![](export_nyrr_results_dashboard.png)
 
-To provision as code, we will tell Grafana where it can pick the dashboards ([default.yaml](roles/races/templates/grafana/provisioning/dashboards/default.yaml.j2)):
+To provision as code, tell Grafana where it can pick the dashboards ([default.yaml](roles/races/templates/grafana/provisioning/dashboards/default.yaml.j2)):
 
 ```yaml
 apiVersion: 1
@@ -200,7 +199,7 @@ providers:
       foldersFromFilesStructure: true
 ```
 
-The dashboard we exported earlier ([[NYRR-1675298041762.json](roles/races/files/grafana/provisioning/dashboards/racing/NYRR-1675298041762.json)]) will be also copied to the right directory.
+The dashboard you exported earlier ([[NYRR-1675298041762.json](roles/races/files/grafana/provisioning/dashboards/racing/NYRR-1675298041762.json)]) will be also copied to the right directory.
 
 Next we will take care of the datasource. The datasource can also be defined as a yaml file on a special directory ([nyrr_race_results_datasouce](roles/races/templates/grafana/provisioning/datasources/nyrr_race_results_datasource.yaml.j2)):
 
@@ -216,7 +215,7 @@ datasources:
       storage: http
 ```
 
-Note that we can use Jinja expressions to refine the datasource behaviour, like passing overrides to the plugin, we do it on a special plugin file, [csv.yaml](roles/races/templates/grafana/provisioning/plugins/csv.yaml.j2)
+Note that you can use Jinja expressions to refine the datasource behaviour, like passing overrides to the plugin. Do it on a special plugin file, [csv.yaml](roles/races/templates/grafana/provisioning/plugins/csv.yaml.j2)
 
 ```yaml
 ---
@@ -229,9 +228,9 @@ apps:
       allow_local_mode: true
 ```
 
-All these artifacts will get deployed on an external volume that will be mounted by the Grafana container.
+All these artifacts are deployed on an external volume that is mounted by the Grafana container.
 
-To recap we now have the following:
+To recap you now have the following:
 
 1. Web server to provide the race results over HTTP
 2. A CSV datasource that can ingest the CSV file
@@ -241,9 +240,9 @@ Time to provision all the pieces using Ansible.
 
 ### Launching the containers from Ansible
 
-Ansible offers support for [podman](https://docs.ansible.com/ansible/latest/collections/containers/podman/index.html), so we can augment our previous playbook with extra instructions.
+Ansible offers support for [podman](https://docs.ansible.com/ansible/latest/collections/containers/podman/index.html), so you can augment the previous playbook with extra instructions.
 
-At the end, our [nyrr_podman_provisioning.yaml](roles/races/nyrr_podman_provisioning.yaml) looks like this:
+At the end, your [nyrr_podman_provisioning.yaml](roles/races/nyrr_podman_provisioning.yaml) looks like this:
 
 ```yaml
 ---
