@@ -1,5 +1,7 @@
 # Building a Grafana dashboard to visualize your NYRR.org race results using Ansible, Podman and Buildah
 
+![](mazinger-z.png)
+
 If you live or work in New York and like running you may have run one of the New York Road Running races.  You may know 
 perhaps one of their most famous races, the [NYRR Marathon](https://en.wikipedia.org/wiki/New_York_City_Marathon).
 
